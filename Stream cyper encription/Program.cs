@@ -1,6 +1,9 @@
 ﻿using SkiaSharp;
 using System;
+using System.Globalization;
 using System.IO;
+using System.Reflection;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace cypher_encyrption
 {
@@ -12,10 +15,7 @@ namespace cypher_encyrption
             {
                 if (args[0] == "Cipher")
                 {
-                    if(args.Length < 2)
-                    {
-                        help();
-                    }else if (args.Length > 4)
+                    if (args.Length != 3)
                     {
                         help();
                     }
@@ -28,15 +28,14 @@ namespace cypher_encyrption
                     {
                         help();
                     }
-                    var (newSeed, rightmostBit) = LFSRStep(args[1], tap);
-                    Console.WriteLine($"New Seed: {newSeed}, Output Bit: {rightmostBit}");
+                    var (newSeed, newBit) = LFSRStep(args[1], tap);
+                    Console.WriteLine($"{args[1]} -seed");
+                    Console.WriteLine($"{newSeed} {newBit}");
 
-                } else if (args[0] == "GenerateKeystream")
+                }
+                else if (args[0] == "GenerateKeystream")
                 {
-                    if (args.Length < 3)
-                    {
-                        help();
-                    }else if (args.Length > 5)
+                    if (args.Length != 4)
                     {
                         help();
                     }
@@ -51,18 +50,53 @@ namespace cypher_encyrption
                     {
                         help();
                     }
+                    Console.WriteLine($"{args[1]} -seed");
                     GenerateKeystream(args[1], tap, step);
                 }
-                else if(args[0] == "Encrypt")
+                else if (args[0] == "Encrypt")
                 {
-
+                    if (args.Length != 2)
+                    {
+                        help();
+                    }
+                    string[] path = Environment.CurrentDirectory.Split("bin");
+                    StreamReader sr = new StreamReader(path[0] + "keystream.txt");
+                    string keystream = sr.ReadLine();
+                    Encrypt(args[1],keystream);
                 }else if (args[0] == "Decrypt")
                 {
-
-                }else if (args[0] == "TripleBits")
+                    if (args.Length != 2)
+                    {
+                        help();
+                    }
+                    string[] path = Environment.CurrentDirectory.Split("bin");
+                    StreamReader sr = new StreamReader(path[0] + "keystream.txt");
+                    string keystream = sr.ReadLine();
+                    Decrypt(args[1], keystream);
+                }
+                else if (args[0] == "TripleBits")
                 {
-
-                }else if (args[0] == "EncryptImage")
+                    if (args.Length != 5)
+                    {
+                        help();
+                    }
+                    int tap = 0;
+                    int step = 0;
+                    int iteration = 0;
+                    try
+                    {
+                        tap = int.Parse(args[2]);
+                        step = int.Parse(args[3]);
+                        iteration = int.Parse(args[4]);
+                    }
+                    catch (Exception e)
+                    {
+                        help();
+                    }
+                    Console.WriteLine($"{args[1]} -seed");
+                    TripleBit(args[1], tap, step, iteration);
+                }
+                else if (args[0] == "EncryptImage")
                 {
 
                 }else if (args[0] == "DecryptImage")
@@ -98,18 +132,19 @@ namespace cypher_encyrption
                 " generate the original image and save it with a different name in the same directory." +
                 " Name:“File_NameNEW”.\r\n");
         }
-        public static (string newSeed, int outputBit) LFSRStep(string seed, int tapPosition)
+        public static (string seen, int outputBit) LFSRStep(string seed, int tap)
         {
-            if (seed.Length == 0 || tapPosition < 0 || tapPosition >= seed.Length)
+            int length = seed.Length;
+            if (tap < 0 || tap >= length)
             {
-                Console.WriteLine("Invalid seed or tap position.");
-                return ("0", 0);
+                Console.WriteLine($"Tap must be between 0 and {length - 1}.");
+                return ("",0);
             }
-            int rightmostBit = seed[^1] - '0'; 
-            int tapBit = seed[tapPosition] - '0';
-            int newBit = rightmostBit ^ tapBit;
-            string newSeed = newBit + seed[..^1];
-            return (newSeed, rightmostBit);
+            int lsb = seed[0] - '0';
+            int tapBit = seed[length - tap] - '0';
+            int newBit = lsb ^ tapBit;
+            string newSeed = seed.Substring(1, length - 1) + newBit;
+            return (newSeed, newBit);
         }
         public static void GenerateKeystream(string seed, int tapPosition, int steps)
         {
@@ -117,12 +152,123 @@ namespace cypher_encyrption
             string keystream = "";
             for (int i = 0; i < steps; i++)
             {
-                var (newSeed, outputBit) = LFSRStep(currentSeed, tapPosition);
-                keystream += outputBit.ToString();
+                var (newSeed, newBit) = LFSRStep(currentSeed, tapPosition);
+                Console.WriteLine($"{newSeed} {newBit}");
+                keystream += newBit.ToString();
                 currentSeed = newSeed;
             }
-            File.WriteAllText(Directory.GetCurrentDirectory()+"/keystream", keystream);
-            Console.WriteLine($"\nKeystream saved to file: keystream");
+            string[] path = Environment.CurrentDirectory.Split("bin");
+            Console.WriteLine($"The Keystream: {keystream}");
+            File.WriteAllText(path[0] +"keystream.txt", keystream);
         }
+        public static void Encrypt(string plaintext, string keystream)
+        {
+            while(keystream.Length < plaintext.Length)
+            {
+                keystream = '0' + keystream;
+            }
+            string ciphertext = "";
+            while(keystream.Length > plaintext.Length)
+            {
+                plaintext = '0'+ plaintext;
+            }
+            for (int i = 0; i < plaintext.Length; i++)
+            {
+                int ptBit = plaintext[i] - '0';
+                int ksBit = keystream[i] - '0';
+                int cipherBit = ptBit ^ ksBit;
+                ciphertext += cipherBit.ToString();
+            }
+            Console.WriteLine($"The ciphertext is: : {ciphertext}");
+
+        }
+        public static void Decrypt(string ciphertext, string keystream)
+        {
+            while (keystream.Length < ciphertext.Length)
+            {
+                keystream = '0' + keystream;
+            }
+            string plaintext = "";
+            while (keystream.Length > ciphertext.Length)
+            {
+                ciphertext = '0' + ciphertext;
+            }
+            for (int i = 0; i < ciphertext.Length; i++)
+            {
+                int ptBit = ciphertext[i] - '0';
+                int ksBit = keystream[i] - '0';
+                int plainBit = ptBit ^ ksBit;
+                plaintext += plainBit.ToString();
+            }
+            Console.WriteLine($"The plaintext is: : {plaintext}");
+
+        }
+        public static void TripleBit(string seed, int tap, int step, int iteration)
+        {
+            for (int i = 0; i < iteration; i++)
+            {
+                int value = 1;
+                for (int j = 0; j < step; j++)
+                {
+                    var result = LFSRStep(seed, tap);
+                    seed = result.Item1;
+                    int rightmostBit = result.Item2;
+
+                    value = value * 3 + rightmostBit;
+                }
+                Console.WriteLine($"{seed} {value}");
+            }
+        }
+        public static void EncryptImage(string imagePath, string seed, int tap)
+        {
+            // Load the image into a bitmap using SkiaSharp
+            using (SKBitmap bitmap = SKBitmap.Decode(imagePath))
+            {
+                // Create a new bitmap to store the encrypted image
+                SKBitmap encryptedBitmap = new SKBitmap(bitmap.Width, bitmap.Height);
+
+                // Use the seed and tap to generate the new seed for LFSR
+                string currentSeed = seed;
+
+                for (int y = 0; y < bitmap.Height; y++)
+                {
+                    for (int x = 0; x < bitmap.Width; x++)
+                    {
+                        // Get the current pixel color (red, green, blue)
+                        SKColor pixelColor = bitmap.GetPixel(x, y);
+
+                        // Generate the new seed and get the rightmost bit
+                        var lfsrResult = LFSRStep(currentSeed, tap);
+                        currentSeed = lfsrResult.Item1;
+                        int rightmostBit = lfsrResult.Item2;
+
+                        // Generate a random 8-bit unsigned integer using the rightmost bit (simulate random behavior)
+                        Random rand = new Random(rightmostBit);
+                        byte randomByte = (byte)rand.Next(0, 256);
+
+                        // XOR the color components with the random byte
+                        byte newRed = (byte)(pixelColor.Red ^ randomByte);
+                        byte newGreen = (byte)(pixelColor.Green ^ randomByte);
+                        byte newBlue = (byte)(pixelColor.Blue ^ randomByte);
+
+                        // Create a new color with the XORed components
+                        SKColor newColor = new SKColor(newRed, newGreen, newBlue);
+
+                        // Set the pixel in the encrypted bitmap
+                        encryptedBitmap.SetPixel(x, y, newColor);
+                    }
+                }
+
+                // Save the encrypted bitmap to a new file in the same directory
+                string[] path = Environment.CurrentDirectory.Split("bin");
+                string encryptedFilePath = path[0]+Path.GetFileNameWithoutExtension(imagePath) + "ENCRYPTED";
+                using (SKImage img = SKImage.FromBitmap(encryptedBitmap))
+                using (SKData data = img.Encode())
+                {
+                    File.WriteAllBytes(encryptedFilePath, data.ToArray());
+                }
+            }
+        }
+
     }
 }

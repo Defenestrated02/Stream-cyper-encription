@@ -2,7 +2,7 @@
   "profiles": {
     "Stream cyper encription": {
       "commandName": "Project",
-      "commandLineArgs": "GenerateKeystream efsfsef 6 4"
+      "commandLineArgs": "TripleBits 0110010010011110 8 5 12\r"
     }
   }
 }
