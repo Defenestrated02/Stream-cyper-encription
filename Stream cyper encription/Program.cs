@@ -98,10 +98,38 @@ namespace cypher_encyrption
                 }
                 else if (args[0] == "EncryptImage")
                 {
+                    if (args.Length != 4)
+                    {
+                        help();
+                    }
+                    int tap = 0;
+                    try
+                    {
+                        tap = int.Parse(args[3]);
+                    }
+                    catch (Exception e)
+                    {
+                        help();
+                    }
+                    EncryptImage(args[1], args[2], tap);
 
-                }else if (args[0] == "DecryptImage")
+                }
+                else if (args[0] == "DecryptImage")
                 {
-
+                    if (args.Length != 4)
+                    {
+                        help();
+                    }
+                    int tap = 0;
+                    try
+                    {
+                        tap = int.Parse(args[3]);
+                    }
+                    catch (Exception e)
+                    {
+                        help();
+                    }
+                    DecryptImage(args[1], args[2], tap);
                 }
                 else
                 {
@@ -221,48 +249,60 @@ namespace cypher_encyrption
         }
         public static void EncryptImage(string imagePath, string seed, int tap)
         {
-            // Load the image into a bitmap using SkiaSharp
             using (SKBitmap bitmap = SKBitmap.Decode(imagePath))
             {
-                // Create a new bitmap to store the encrypted image
                 SKBitmap encryptedBitmap = new SKBitmap(bitmap.Width, bitmap.Height);
-
-                // Use the seed and tap to generate the new seed for LFSR
                 string currentSeed = seed;
-
                 for (int y = 0; y < bitmap.Height; y++)
                 {
+                    var (newSeed, newBit) = LFSRStep(currentSeed, tap);
+                    currentSeed = newSeed;
+                    Random rand = new Random(Int32.Parse(currentSeed, NumberStyles.BinaryNumber));
                     for (int x = 0; x < bitmap.Width; x++)
                     {
-                        // Get the current pixel color (red, green, blue)
                         SKColor pixelColor = bitmap.GetPixel(x, y);
-
-                        // Generate the new seed and get the rightmost bit
-                        var lfsrResult = LFSRStep(currentSeed, tap);
-                        currentSeed = lfsrResult.Item1;
-                        int rightmostBit = lfsrResult.Item2;
-
-                        // Generate a random 8-bit unsigned integer using the rightmost bit (simulate random behavior)
-                        Random rand = new Random(rightmostBit);
                         byte randomByte = (byte)rand.Next(0, 256);
-
-                        // XOR the color components with the random byte
                         byte newRed = (byte)(pixelColor.Red ^ randomByte);
                         byte newGreen = (byte)(pixelColor.Green ^ randomByte);
                         byte newBlue = (byte)(pixelColor.Blue ^ randomByte);
-
-                        // Create a new color with the XORed components
                         SKColor newColor = new SKColor(newRed, newGreen, newBlue);
-
-                        // Set the pixel in the encrypted bitmap
                         encryptedBitmap.SetPixel(x, y, newColor);
                     }
                 }
-
-                // Save the encrypted bitmap to a new file in the same directory
                 string[] path = Environment.CurrentDirectory.Split("bin");
-                string encryptedFilePath = path[0]+Path.GetFileNameWithoutExtension(imagePath) + "ENCRYPTED";
+                string encryptedFilePath = path[0]+Path.GetFileNameWithoutExtension(imagePath) + "ENCRYPTED"+ Path.GetExtension(imagePath);
                 using (SKImage img = SKImage.FromBitmap(encryptedBitmap))
+                using (SKData data = img.Encode())
+                {
+                    File.WriteAllBytes(encryptedFilePath, data.ToArray());
+                }
+            }
+        }
+        public static void DecryptImage(string imagePath, string seed, int tap)
+        {
+            using (SKBitmap bitmap = SKBitmap.Decode(imagePath))
+            {
+                SKBitmap DecryptedBitmap = new SKBitmap(bitmap.Width, bitmap.Height);
+                string currentSeed = seed;
+                for (int y = 0; y < bitmap.Height; y++)
+                {
+                    var (newSeed, newBit) = LFSRStep(currentSeed, tap);
+                    currentSeed = newSeed;
+                    Random rand = new Random(Int32.Parse(currentSeed, NumberStyles.BinaryNumber));
+                    for (int x = 0; x < bitmap.Width; x++)
+                    {
+                        SKColor pixelColor = bitmap.GetPixel(x, y);
+                        byte randomByte = (byte)rand.Next(0, 256);
+                        byte newRed = (byte)(pixelColor.Red ^ randomByte);
+                        byte newGreen = (byte)(pixelColor.Green ^ randomByte);
+                        byte newBlue = (byte)(pixelColor.Blue ^ randomByte);
+                        SKColor newColor = new SKColor(newRed, newGreen, newBlue);
+                        DecryptedBitmap.SetPixel(x, y, newColor);
+                    }
+                }
+                string[] path = Environment.CurrentDirectory.Split("bin");
+                string encryptedFilePath = path[0] + Path.GetFileNameWithoutExtension(imagePath) + "NEW" + Path.GetExtension(imagePath);
+                using (SKImage img = SKImage.FromBitmap(DecryptedBitmap))
                 using (SKData data = img.Encode())
                 {
                     File.WriteAllBytes(encryptedFilePath, data.ToArray());
